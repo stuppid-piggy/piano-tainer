@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Piano Chord Practice Studio - Full Chord Support</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #ffffff;
+      color: #0f172a;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Card Slide Animations */
+    .chord-card {
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
+      will-change: transform, opacity;
+    }
+
+    /* Slide Down Left to Correct Zone */
+    .slide-correct {
+      transform: translate3d(-200px, 320px, 0) rotate(-20deg) scale(0.6) !important;
+      opacity: 0 !important;
+      pointer-events: none;
+    }
+
+    /* Slide Down Right to Retry Zone */
+    .slide-incorrect {
+      transform: translate3d(200px, 320px, 0) rotate(20deg) scale(0.6) !important;
+      opacity: 0 !important;
+      pointer-events: none;
+    }
+
+    /* Pulse animation for active mic */
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .mic-active-dot {
+      animation: pulse-ring 1.8s infinite ease-in-out;
+    }
+
+    /* Card Badge pop-in animation in zones */
+    @keyframes popIn {
+      0% { transform: scale(0.5); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .badge-pop {
+      animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+
+    /* Hide scrollbars for clean mini-tag lists */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-white text-slate-900 flex flex-col justify-between selection:bg-slate-100">
+
+  <!-- ================= PAGE 1: SETUP & CHORD SELECTION ================= -->
+  <section id="page-setup" class="w-full max-w-xl mx-auto px-6 py-8 flex-grow flex flex-col justify-center gap-6">
+    
+    <!-- Title Header -->
+    <div class="space-y-1.5 text-center sm:text-left">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold uppercase tracking-wider">
+        Full-Spectrum Chord Trainer
+      </div>
+      <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">全和絃卡片練琴與聽辨</h1>
+      <p class="text-xs text-slate-500">支援 12 個根音與 Major (Mj)、m、7、Maj7、m7、dim、aug、sus2/sus4 等全套和絃。</p>
+    </div>
+
+    <!-- Quick Generator Buttons (Types) -->
+    <div class="space-y-2">
+      <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">一鍵選擇全 12 音套組</label>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" onclick="generateSet('Mj')" class="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition-colors">
+          全部 Major (Mj)
+        </button>
+        <button type="button" onclick="generateSet('m')" class="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition-colors">
+          全部 Minor (m)
+        </button>
+        <button type="button" onclick="generateSet('7')" class="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition-colors">
+          全部 7 和絃
+        </button>
+        <button type="button" onclick="generateSet('Maj7')" class="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition-colors">
+          全部 Maj7 (Mj7)
+        </button>
+        <button type="button" onclick="generateSet('m7')" class="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition-colors">
+          全部 m7
+        </button>
+        <button type="button" onclick="generateSet('dim')" class="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition-colors">
+          全部 dim
+        </button>
+        <button type="button" onclick="generateSet('sus4')" class="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition-colors">
+          全部 sus4
+        </button>
+      </div>
+    </div>
+
+    <!-- Root Filter Chips -->
+    <div class="space-y-1.5">
+      <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">按根音快速切換 (12 個半音)</label>
+      <div id="root-chips" class="flex flex-wrap gap-1.5">
+        <!-- JS populates root chips -->
+      </div>
+    </div>
+
+    <!-- Custom Textarea Input -->
+    <div class="space-y-1.5">
+      <div class="flex justify-between items-center">
+        <label for="chords-input" class="text-xs font-semibold text-slate-700 uppercase tracking-wider">和絃清單 <span class="text-[11px] font-normal text-slate-400 lowercase">(每行一個，如 CMj, Dm, G7, FMaj7)</span></label>
+        <span id="chords-count-badge" class="text-xs font-medium text-slate-500 font-mono">0 個和絃</span>
+      </div>
+      <textarea 
+        id="chords-input" 
+        rows="4" 
+        oninput="updateCountBadge()"
+        placeholder="例如：&#10;CMj&#10;Dm&#10;G7&#10;EMj7&#10;F#m7&#10;Bdim"
+        class="w-full p-3.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all resize-y placeholder-slate-300 font-mono leading-relaxed"
+      ></textarea>
+    </div>
+
+    <!-- Mode & Mic Toggles -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="space-y-1">
+        <label for="draw-mode" class="text-xs font-semibold text-slate-600">抽籤順序</label>
+        <select id="draw-mode" class="w-full px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 outline-none cursor-pointer">
+          <option value="random">隨機亂序 (Random)</option>
+          <option value="sequential">順序練習 (Sequential)</option>
+        </select>
+      </div>
+
+      <div class="space-y-1">
+        <label for="mic-toggle" class="text-xs font-semibold text-slate-600">麥克風實時聽辨</label>
+        <div class="flex items-center justify-between px-3.5 py-2 border border-slate-200 rounded-xl bg-white">
+          <span class="text-xs text-slate-600 font-medium">琴音辨識對錯</span>
+          <input type="checkbox" id="mic-toggle" checked class="w-4 h-4 rounded accent-slate-900 cursor-pointer">
+        </div>
+      </div>
+    </div>
+
+    <!-- Start Button -->
+    <button 
+      type="button" 
+      onclick="startPractice()" 
+      class="w-full py-3.5 px-6 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm rounded-xl transition-all shadow-sm active:scale-[0.99] flex items-center justify-center gap-2 mt-1"
+    >
+      <span>開始練習</span>
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+    </button>
+
+  </section>
+
+
+  <!-- ================= PAGE 2: PRACTICE CARD & REALTIME MATCHING ================= -->
+  <section id="page-practice" class="hidden w-full max-w-xl mx-auto px-6 py-6 flex-grow flex-col justify-between items-center relative min-h-screen">
+    
+    <!-- Top Bar: Back, Millisecond Timer, Mic Badge -->
+    <div class="w-full flex justify-between items-center border-b border-slate-100 pb-3">
+      <button type="button" onclick="stopPractice()" class="text-xs font-semibold text-slate-400 hover:text-slate-900 transition-colors flex items-center gap-1">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        <span>返回設定</span>
+      </button>
+
+      <!-- Millisecond Accurate Timer -->
+      <div class="flex items-center gap-1.5 font-mono text-base font-bold text-slate-800 bg-slate-50 px-3 py-1 rounded-lg border border-slate-200/60">
+        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span id="timer-display">00:00.00</span>
+      </div>
+
+      <!-- Mic Badge -->
+      <div id="mic-status-badge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
+        <span class="w-2 h-2 rounded-full bg-slate-400" id="mic-status-dot"></span>
+        <span id="mic-status-text">麥克風</span>
+      </div>
+    </div>
+
+    <!-- Center Stage: Minimal Pure Card (NO Notes / Piano graphics) -->
+    <div class="w-full my-auto py-8 flex flex-col items-center justify-center relative min-h-[310px]">
+      
+      <!-- Card Container -->
+      <div 
+        id="chord-card" 
+        class="chord-card w-full max-w-xs h-64 bg-white border border-slate-200 rounded-3xl shadow-xs flex flex-col items-center justify-center relative select-none"
+      >
+        <span class="text-[10px] font-bold text-slate-300 uppercase tracking-widest absolute top-6">TARGET CHORD</span>
+        <h2 id="card-chord-name" class="text-6xl sm:text-7xl font-black text-slate-900 tracking-tight">--</h2>
+      </div>
+
+      <!-- Live Detection Feedback -->
+      <div id="detection-hint" class="mt-4 text-xs font-semibold text-slate-400 h-5 transition-opacity duration-200">
+        請彈奏鋼琴和絃...
+      </div>
+
+      <!-- Manual Pass / Retry Action Buttons -->
+      <div class="flex items-center gap-4 mt-4">
+        <button 
+          type="button" 
+          onclick="handleManualAction(false)"
+          class="px-5 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-semibold transition-all active:scale-95 flex items-center gap-1.5"
+        >
+          <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          <span>不熟悉 (跳過)</span>
+        </button>
+
+        <button 
+          type="button" 
+          onclick="handleManualAction(true)"
+          class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-all active:scale-95 shadow-xs flex items-center gap-1.5"
+        >
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          <span>彈對了</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Bottom Left & Right Drop Zones with Mini Card Tags -->
+    <div class="w-full border-t border-slate-100 pt-4 flex flex-col gap-3">
+      <div class="grid grid-cols-2 gap-3 w-full">
+        
+        <!-- Left: Correct Drop Zone -->
+        <div class="flex flex-col gap-2 p-3 rounded-2xl bg-emerald-50/40 border border-emerald-100 min-h-[110px]">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+              <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>正確區</span>
+            </div>
+            <span id="count-correct" class="text-xs font-bold text-emerald-800 font-mono bg-emerald-100/80 px-2 py-0.5 rounded-full">0</span>
+          </div>
+
+          <!-- Dynamic Correct Card Tags -->
+          <div id="correct-cards-list" class="flex flex-wrap gap-1.5 overflow-y-auto max-h-24 p-1 no-scrollbar">
+            <span class="text-[11px] text-emerald-600/60 italic my-auto">暫無卡片</span>
+          </div>
+        </div>
+
+        <!-- Right: Retry Drop Zone -->
+        <div class="flex flex-col gap-2 p-3 rounded-2xl bg-rose-50/40 border border-rose-100 min-h-[110px]">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5 text-xs font-semibold text-rose-700">
+              <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              <span>錯誤區</span>
+            </div>
+            <span id="count-retry" class="text-xs font-bold text-rose-800 font-mono bg-rose-100/80 px-2 py-0.5 rounded-full">0</span>
+          </div>
+
+          <!-- Dynamic Retry Card Tags -->
+          <div id="retry-cards-list" class="flex flex-wrap gap-1.5 overflow-y-auto max-h-24 p-1 no-scrollbar">
+            <span class="text-[11px] text-rose-600/60 italic my-auto">暫無卡片</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Finish Practice Button -->
+      <div class="flex justify-center">
+        <button 
+          type="button" 
+          onclick="finishPractice()" 
+          class="px-5 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors border border-slate-200 rounded-xl hover:bg-slate-50"
+        >
+          結束練習並查看毫秒總結
+        </button>
+      </div>
+    </div>
+
+  </section>
+
+
+  <!-- ================= SUMMARY MODAL ================= -->
+  <div id="summary-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs hidden items-center justify-center p-6 z-50 transition-opacity">
+    <div class="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-6 space-y-5 shadow-xl">
+      
+      <div class="text-center space-y-1">
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">PRACTICE REPORT</span>
+        <h3 class="text-2xl font-bold text-slate-900">練習結算報告</h3>
+      </div>
+
+      <!-- Millisecond Time & Accuracy Grid -->
+      <div class="grid grid-cols-2 gap-2.5">
+        <div class="p-3 bg-slate-50 border border-slate-100 rounded-2xl text-center space-y-0.5">
+          <span class="text-xs text-slate-400 font-medium">總耗時 (毫秒)</span>
+          <div id="modal-time" class="text-lg font-bold text-slate-800 font-mono">00:00.00</div>
+        </div>
+
+        <div class="p-3 bg-slate-50 border border-slate-100 rounded-2xl text-center space-y-0.5">
+          <span class="text-xs text-slate-400 font-medium">正確率</span>
+          <div id="modal-accuracy" class="text-lg font-bold text-slate-800 font-mono">0%</div>
+        </div>
+      </div>
+
+      <!-- Correct List with Time Spent -->
+      <div class="space-y-1.5">
+        <span class="text-xs font-semibold text-emerald-700 flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          正確和絃及反應速度：
+        </span>
+        <div id="modal-correct-list" class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-2 border border-emerald-100 rounded-xl bg-emerald-50/30">
+        </div>
+      </div>
+
+      <!-- Needs Work List -->
+      <div class="space-y-1.5">
+        <span class="text-xs font-semibold text-rose-700 flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          需加強和絃：
+        </span>
+        <div id="modal-retry-list" class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-2 border border-rose-100 rounded-xl bg-rose-50/30">
+        </div>
+      </div>
+
+      <!-- Modal Action Buttons -->
+      <div class="space-y-2 pt-2">
+        <button 
+          type="button" 
+          onclick="restartPractice()" 
+          class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm rounded-xl transition-all shadow-xs"
+        >
+          再練一次
+        </button>
+        <button 
+          type="button" 
+          onclick="closeModalAndSetup()" 
+          class="w-full py-3 bg-white hover:bg-slate-50 text-slate-600 font-semibold text-sm border border-slate-200 rounded-xl transition-all"
+        >
+          返回重新選擇
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- JavaScript App Engine -->
+  <script>
+    /* ==========================================================================
+       1. CHROMATIC ROOTS & FULL CHORD PARSER FORMULAS
+       ========================================================================== */
+    const ROOTS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    
+    // Normalization table for sharp/flat aliases
+    const ALIAS_MAP = {
+      'DB': 'C#', 'EB': 'D#', 'GB': 'F#', 'AB': 'G#', 'BB': 'A#',
+      'CB': 'B',  'FB': 'E',  'E#': 'F',  'B#': 'C'
+    };
+
+    // Semi-tone interval mapping for all requested chord variations
+    const FORMULAS = {
+      // Major Variations
+      '': [0, 4, 7],
+      'MJ': [0, 4, 7],
+      'MAJ': [0, 4, 7],
+      'M': [0, 4, 7],
+
+      // Minor Variations
+      'MIN': [0, 3, 7],
+
+      // Dominant / Major / Minor 7th
+      '7': [0, 4, 7, 10],
+      'MAJ7': [0, 4, 7, 11],
+      'MJ7': [0, 4, 7, 11],
+      'M7': [0, 3, 7, 10],
+      'MIN7': [0, 3, 7, 10],
+
+      // Diminished & Augmented
+      'DIM': [0, 3, 6],
+      'AUG': [0, 4, 8],
+
+      // Suspended
+      'SUS2': [0, 2, 7],
+      'SUS4': [0, 5, 7]
+    };
+
+    function parseChord(chordStr) {
+      if (!chordStr) return null;
+      let raw = chordStr.trim();
+      if (!raw) return null;
+
+      let root = '';
+      let type = '';
+
+      // Check 2-character root (e.g. C#, Db)
+      if (raw.length > 1 && (raw[1] === '#' || raw[1] === 'b' || raw[1] === 'B')) {
+        root = raw.substring(0, 2).toUpperCase();
+        type = raw.substring(2);
+      } else {
+        root = raw.substring(0, 1).toUpperCase();
+        type = raw.substring(1);
+      }
+
+      if (ALIAS_MAP[root]) root = ALIAS_MAP[root];
+
+      const rootIdx = ROOTS.indexOf(root);
+      if (rootIdx === -1) return null;
+
+      // Normalize Type string
+      let cleanType = type.trim().toUpperCase();
+      
+      // Handle special lower 'm' explicitly before uppercase conversion
+      if (type.trim() === 'm') cleanType = 'MIN';
+
+      const intervals = FORMULAS[cleanType] || FORMULAS[''];
+      const targetNotes = intervals.map(semitones => ROOTS[(rootIdx + semitones) % 12]);
+
+      return {
+        name: raw,
+        notes: [...new Set(targetNotes)]
+      };
+    }
+
+    /* ==========================================================================
+       2. APP STATE
+       ========================================================================== */
+    let chordQueue = [];
+    let currentChord = null;
+    let correctChords = [];
+    let retryChords = [];
+
+    // Millisecond High-Precision Timer
+    let startTime = 0;
+    let cardStartTime = 0;
+    let timerAnimFrame = null;
+    let elapsedMs = 0;
+
+    // Web Audio Microphone Pitch Engine
+    let audioCtx = null;
+    let micStream = null;
+    let analyserNode = null;
+    let isListening = false;
+    let pitchAnimId = null;
+    let detectedNotesSet = new Set();
+    let noteResetTimer = null;
+    let isTransitioning = false;
+
+    /* ==========================================================================
+       3. INPUT PRESETS & CHIPS POPULATION
+       ========================================================================== */
+    function populateRootChips() {
+      const container = document.getElementById('root-chips');
+      container.innerHTML = '';
+      ROOTS.forEach(root => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'px-2.5 py-1 text-xs font-mono font-bold bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg transition-colors';
+        btn.textContent = root;
+        btn.onclick = () => addRootChords(root);
+        container.appendChild(btn);
+      });
+    }
+
+    function addRootChords(root) {
+      const textarea = document.getElementById('chords-input');
+      const current = textarea.value.trim();
+      const newItems = [`${root}Mj`, `${root}m`, `${root}7`, `${root}Maj7`].join('\n');
+      textarea.value = current ? `${current}\n${newItems}` : newItems;
+      updateCountBadge();
+    }
+
+    function generateSet(type) {
+      const textarea = document.getElementById('chords-input');
+      const list = ROOTS.map(r => `${r}${type}`).join('\n');
+      textarea.value = list;
+      updateCountBadge();
+    }
+
+    function updateCountBadge() {
+      const text = document.getElementById('chords-input').value;
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      document.getElementById('chords-count-badge').textContent = `${lines.length} 個和絃`;
+    }
+
+    /* ==========================================================================
+       4. PRACTICE SESSION CONTROLLER
+       ========================================================================== */
+    function startPractice() {
+      const text = document.getElementById('chords-input').value;
+      const rawList = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+      if (rawList.length === 0) {
+        alert('請先輸入或選擇至少一個和絃');
+        return;
+      }
+
+      const parsed = rawList.map(name => parseChord(name)).filter(c => c !== null);
+
+      if (parsed.length === 0) {
+        alert('無法辨識輸入的和絃格式，請輸入如 CMj, Dm, G7 等');
+        return;
+      }
+
+      const mode = document.getElementById('draw-mode').value;
+      chordQueue = mode === 'random' ? [...parsed].sort(() => Math.random() - 0.5) : [...parsed];
+
+      correctChords = [];
+      retryChords = [];
+      renderZoneCards();
+
+      // Start High-precision Millisecond Timer
+      startTime = performance.now();
+      cancelAnimationFrame(timerAnimFrame);
+      runMillisecondTimer();
+
+      // Switch Page
+      document.getElementById('page-setup').classList.add('hidden');
+      const practicePage = document.getElementById('page-practice');
+      practicePage.classList.remove('hidden');
+      practicePage.classList.add('flex');
+
+      // Start Audio
+      if (document.getElementById('mic-toggle').checked) {
+        initMicrophone();
+      } else {
+        updateMicBadge(false, '麥克風關閉');
+      }
+
+      loadNextCard();
+    }
+
+    function stopPractice() {
+      cancelAnimationFrame(timerAnimFrame);
+      stopMicrophone();
+
+      const practicePage = document.getElementById('page-practice');
+      practicePage.classList.add('hidden');
+      practicePage.classList.remove('flex');
+      document.getElementById('page-setup').classList.remove('hidden');
+    }
+
+    function runMillisecondTimer() {
+      function step() {
+        elapsedMs = performance.now() - startTime;
+        document.getElementById('timer-display').textContent = formatMs(elapsedMs);
+        timerAnimFrame = requestAnimationFrame(step);
+      }
+      step();
+    }
+
+    function formatMs(ms) {
+      const totalSecs = Math.floor(ms / 1000);
+      const mins = String(Math.floor(totalSecs / 60)).padStart(2, '0');
+      const secs = String(totalSecs % 60).padStart(2, '0');
+      const hundredths = String(Math.floor((ms % 1000) / 10)).padStart(2, '0');
+      return `${mins}:${secs}.${hundredths}`;
+    }
+
+    function loadNextCard() {
+      if (chordQueue.length === 0) {
+        finishPractice();
+        return;
+      }
+
+      currentChord = chordQueue.shift();
+      cardStartTime = performance.now();
+
+      const cardEl = document.getElementById('chord-card');
+      const chordNameEl = document.getElementById('card-chord-name');
+
+      cardEl.className = 'chord-card w-full max-w-xs h-64 bg-white border border-slate-200 rounded-3xl shadow-xs flex flex-col items-center justify-center relative select-none';
+      chordNameEl.textContent = currentChord.name;
+
+      isTransitioning = false;
+      document.getElementById('detection-hint').textContent = '請彈奏鋼琴和絃...';
+    }
+
+    /* ==========================================================================
+       5. CARD ANIMATIONS & MINI TAGS IN DROP ZONES
+       ========================================================================== */
+    function handleManualAction(isCorrect) {
+      if (isTransitioning || !currentChord) return;
+      isTransitioning = true;
+
+      const spentMs = performance.now() - cardStartTime;
+      const cardRecord = { ...currentChord, spentMs };
+
+      const cardEl = document.getElementById('chord-card');
+
+      if (isCorrect) {
+        correctChords.push(cardRecord);
+        cardEl.classList.add('slide-correct');
+      } else {
+        retryChords.push(cardRecord);
+        cardEl.classList.add('slide-incorrect');
+      }
+
+      setTimeout(() => {
+        renderZoneCards();
+        loadNextCard();
+      }, 380);
+    }
+
+    function renderZoneCards() {
+      document.getElementById('count-correct').textContent = correctChords.length;
+      document.getElementById('count-retry').textContent = retryChords.length;
+
+      // Render Correct Drop Zone Tags
+      const correctListEl = document.getElementById('correct-cards-list');
+      correctListEl.innerHTML = '';
+      if (correctChords.length === 0) {
+        correctListEl.innerHTML = `<span class="text-[11px] text-emerald-600/60 italic my-auto">暫無卡片</span>`;
+      } else {
+        correctChords.forEach(item => {
+          const badge = document.createElement('span');
+          badge.className = 'badge-pop px-2 py-0.5 bg-white border border-emerald-200 text-emerald-800 text-[11px] font-mono font-bold rounded-lg shadow-2xs flex items-center gap-1';
+          badge.textContent = item.name;
+          correctListEl.appendChild(badge);
+        });
+      }
+
+      // Render Retry Drop Zone Tags
+      const retryListEl = document.getElementById('retry-cards-list');
+      retryListEl.innerHTML = '';
+      if (retryChords.length === 0) {
+        retryListEl.innerHTML = `<span class="text-[11px] text-rose-600/60 italic my-auto">暫無卡片</span>`;
+      } else {
+        retryChords.forEach(item => {
+          const badge = document.createElement('span');
+          badge.className = 'badge-pop px-2 py-0.5 bg-white border border-rose-200 text-rose-800 text-[11px] font-mono font-bold rounded-lg shadow-2xs flex items-center gap-1';
+          badge.textContent = item.name;
+          retryListEl.appendChild(badge);
+        });
+      }
+    }
+
+    /* ==========================================================================
+       6. WEB AUDIO API HIGH-PRECISION AUDIO ENGINE
+       ========================================================================== */
+    async function initMicrophone() {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          updateMicBadge(false, '不支援麥克風');
+          return;
+        }
+
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume();
+        }
+
+        const source = audioCtx.createMediaStreamSource(micStream);
+        analyserNode = audioCtx.createAnalyser();
+        analyserNode.fftSize = 4096;
+        source.connect(analyserNode);
+
+        isListening = true;
+        updateMicBadge(true, '聆聽中');
+        startPitchLoop();
+
+      } catch (err) {
+        console.error('Mic Access Error:', err);
+        updateMicBadge(false, '無麥克風權限');
+      }
+    }
+
+    function stopMicrophone() {
+      isListening = false;
+      if (pitchAnimId) cancelAnimationFrame(pitchAnimId);
+      if (micStream) {
+        micStream.getTracks().forEach(track => track.stop());
+        micStream = null;
+      }
+      updateMicBadge(false, '麥克風關閉');
+    }
+
+    function updateMicBadge(active, text) {
+      const badge = document.getElementById('mic-status-badge');
+      const dot = document.getElementById('mic-status-dot');
+      const statusText = document.getElementById('mic-status-text');
+
+      statusText.textContent = text;
+      if (active) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-500 mic-active-dot';
+        badge.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-slate-400';
+        badge.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500';
+      }
+    }
+
+    function startPitchLoop() {
+      const buffer = new Float32Array(analyserNode.fftSize);
+
+      function detect() {
+        if (!isListening) return;
+
+        analyserNode.getFloatTimeDomainData(buffer);
+        const pitch = autoCorrelate(buffer, audioCtx.sampleRate);
+
+        if (pitch !== -1 && !isTransitioning && currentChord) {
+          const noteName = pitchToNote(pitch);
+          processDetectedNote(noteName);
+        }
+
+        pitchAnimId = requestAnimationFrame(detect);
+      }
+
+      detect();
+    }
+
+    function processDetectedNote(noteName) {
+      if (!detectedNotesSet.has(noteName)) {
+        detectedNotesSet.add(noteName);
+        checkMatch();
+      }
+
+      clearTimeout(noteResetTimer);
+      noteResetTimer = setTimeout(() => {
+        detectedNotesSet.clear();
+      }, 2000);
+    }
+
+    function checkMatch() {
+      if (!currentChord || isTransitioning) return;
+
+      const targetNotes = currentChord.notes;
+      const detectedArray = Array.from(detectedNotesSet);
+
+      const isMatched = targetNotes.every(tn => detectedArray.includes(tn));
+
+      if (isMatched) {
+        document.getElementById('detection-hint').textContent = '✓ 正確！';
+        handleManualAction(true);
+      }
+    }
+
+    function autoCorrelate(buf, sampleRate) {
+      const SIZE = buf.length;
+      let rms = 0;
+
+      for (let i = 0; i < SIZE; i++) {
+        const val = buf[i];
+        rms += val * val;
+      }
+      rms = Math.sqrt(rms / SIZE);
+
+      if (rms < 0.012) return -1;
+
+      let r1 = 0, r2 = SIZE - 1, thres = 0.2;
+      for (let i = 0; i < SIZE / 2; i++) {
+        if (Math.abs(buf[i]) < thres) { r1 = i; break; }
+      }
+      for (let i = 1; i < SIZE / 2; i++) {
+        if (Math.abs(buf[SIZE - i]) < thres) { r2 = SIZE - i; break; }
+      }
+
+      buf = buf.slice(r1, r2);
+      const c = new Array(buf.length).fill(0);
+      for (let i = 0; i < buf.length; i++) {
+        for (let j = 0; j < buf.length - i; j++) {
+          c[i] = c[i] + buf[j] * buf[j + i];
+        }
+      }
+
+      let d = 0;
+      while (c[d] > c[d + 1]) d++;
+      let maxval = -1, maxpos = -1;
+      for (let i = d; i < buf.length; i++) {
+        if (c[i] > maxval) {
+          maxval = c[i];
+          maxpos = i;
+        }
+      }
+      let T0 = maxpos;
+
+      const x1 = c[T0 - 1], x2 = c[T0], x3 = c[T0 + 1];
+      const a = (x1 + x3 - 2 * x2) / 2;
+      const b = (x3 - x1) / 2;
+      if (a) T0 = T0 - b / (2 * a);
+
+      return sampleRate / T0;
+    }
+
+    function pitchToNote(frequency) {
+      const noteNum = 12 * (Math.log(frequency / 440) / Math.log(2));
+      const midiNote = Math.round(noteNum) + 69;
+      return ROOTS[midiNote % 12];
+    }
+
+    /* ==========================================================================
+       7. MILLISECOND SUMMARY MODAL
+       ========================================================================== */
+    function finishPractice() {
+      cancelAnimationFrame(timerAnimFrame);
+      stopMicrophone();
+
+      const totalExecuted = correctChords.length + retryChords.length;
+      const accuracy = totalExecuted > 0 ? Math.round((correctChords.length / totalExecuted) * 100) : 0;
+
+      document.getElementById('modal-time').textContent = formatMs(elapsedMs);
+      document.getElementById('modal-accuracy').textContent = `${accuracy}%`;
+
+      // Render Correct List in Modal with Time
+      const modalCorrectEl = document.getElementById('modal-correct-list');
+      modalCorrectEl.innerHTML = '';
+      if (correctChords.length === 0) {
+        modalCorrectEl.innerHTML = `<span class="text-xs text-slate-400">無</span>`;
+      } else {
+        correctChords.forEach(item => {
+          const badge = document.createElement('span');
+          badge.className = 'px-2 py-1 bg-white border border-emerald-200 text-emerald-800 text-xs font-mono font-bold rounded-lg flex items-center gap-1';
+          badge.innerHTML = `<span>${item.name}</span><span class="text-[10px] text-emerald-600 font-normal">(${(item.spentMs/1000).toFixed(2)}s)</span>`;
+          modalCorrectEl.appendChild(badge);
+        });
+      }
+
+      // Render Retry List in Modal
+      const modalRetryEl = document.getElementById('modal-retry-list');
+      modalRetryEl.innerHTML = '';
+      if (retryChords.length === 0) {
+        modalRetryEl.innerHTML = `<span class="text-xs text-emerald-600 font-medium">全數正確，完美表現！</span>`;
+      } else {
+        retryChords.forEach(item => {
+          const badge = document.createElement('span');
+          badge.className = 'px-2 py-1 bg-white border border-rose-200 text-rose-800 text-xs font-mono font-bold rounded-lg flex items-center gap-1';
+          badge.innerHTML = `<span>${item.name}</span><span class="text-[10px] text-rose-600 font-normal">(${(item.spentMs/1000).toFixed(2)}s)</span>`;
+          modalRetryEl.appendChild(badge);
+        });
+      }
+
+      const modal = document.getElementById('summary-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function restartPractice() {
+      document.getElementById('summary-modal').classList.add('hidden');
+      document.getElementById('summary-modal').classList.remove('flex');
+      startPractice();
+    }
+
+    function closeModalAndSetup() {
+      document.getElementById('summary-modal').classList.add('hidden');
+      document.getElementById('summary-modal').classList.remove('flex');
+      stopPractice();
+    }
+
+    // Init Page Load
+    window.addEventListener('DOMContentLoaded', () => {
+      populateRootChips();
+      generateSet('Mj');
+    });
+  </script>
+</body>
+</html>
